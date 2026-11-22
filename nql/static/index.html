@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NQL</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #e3e2dd;
+    --accent: #2f5bd3; --accent-text: #ffffff; --code-bg: #f2f1ed; --danger: #b42318;
+    --danger-bg: #fdecea; --ok: #1a7f4b; --ok-bg: #e6f4ec; --warn-bg: #fff6e0; --warn: #8a5a00;
+    --radius: 10px; --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514; --panel: #1e1e1c; --text: #ecebe6; --muted: #9b9a94; --border: #33322f;
+      --accent: #7b9cff; --accent-text: #0e1220; --code-bg: #262624; --danger: #ff8a80;
+      --danger-bg: #3a1d1b; --ok: #6fd39c; --ok-bg: #16301f; --warn-bg: #33290f; --warn: #f0c060;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 20px;
+           border-bottom: 1px solid var(--border); background: var(--panel); }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .5px; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--code-bg);
+          color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50vw; }
+  .pill.on { background: var(--ok-bg); color: var(--ok); }
+  .spacer { flex: 1; }
+  button { font: inherit; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+           padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button:disabled { opacity: .55; cursor: default; }
+  button.link { border: none; background: none; color: var(--accent); padding: 2px 4px; }
+  input, textarea { font: inherit; color: var(--text); background: var(--panel);
+                    border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; width: 100%; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .layout { display: grid; grid-template-columns: 280px 1fr; height: calc(100vh - 53px); }
+  aside { border-right: 1px solid var(--border); overflow: auto; padding: 14px; background: var(--panel); }
+  main { overflow: auto; padding: 20px; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+          padding: 16px; margin-bottom: 16px; }
+  .muted { color: var(--muted); }
+  small { font-size: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  .table-item { margin-bottom: 2px; }
+  .table-item summary { cursor: pointer; padding: 3px 4px; border-radius: 6px; font-family: var(--mono);
+                        font-size: 13px; list-style: none; }
+  .table-item summary::before { content: "▸ "; color: var(--muted); }
+  .table-item[open] summary::before { content: "▾ "; }
+  .table-item summary:hover { background: var(--code-bg); }
+  .cols { padding: 2px 0 6px 18px; font-family: var(--mono); font-size: 12px; }
+  .cols div { display: flex; justify-content: space-between; gap: 8px; }
+  .cols .t { color: var(--muted); }
+  .ask textarea { min-height: 70px; resize: vertical; font-size: 15px; }
+  .sql { width: 100%; min-height: 60px; font-family: var(--mono); font-size: 13px; background: var(--code-bg);
+         border: 1px solid var(--border); border-radius: 8px; padding: 10px; resize: vertical; }
+  .q { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+  .note { font-size: 13px; padding: 8px 10px; border-radius: 8px; margin: 8px 0; }
+  .note.err { background: var(--danger-bg); color: var(--danger); white-space: pre-wrap; }
+  .note.warn { background: var(--warn-bg); color: var(--warn); }
+  .results { overflow: auto; max-height: 420px; border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--code-bg); font-weight: 600; }
+  td.null { color: var(--muted); font-style: italic; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  dialog { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel);
+           color: var(--text); width: min(520px, 92vw); padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  label { display: block; font-size: 13px; margin: 12px 0 4px; color: var(--muted); }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor;
+          border-right-color: transparent; border-radius: 50%; animation: s .7s linear infinite; vertical-align: -2px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .examples button { font-size: 12px; padding: 3px 8px; }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; height: auto; }
+    aside { border-right: none; border-bottom: 1px solid var(--border); max-height: 240px; }
+    main { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>NQL</h1>
+  <span id="dbPill" class="pill">Not connected</span>
+  <span class="spacer"></span>
+  <button id="disconnectBtn" class="link" hidden>Disconnect</button>
+  <button id="settingsBtn">Settings</button>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="row" style="justify-content:space-between;margin-bottom:8px">
+      <strong>Schema</strong>
+      <button id="refreshBtn" class="link" title="Re-read the database schema" hidden>Refresh</button>
+    </div>
+    <input id="schemaFilter" placeholder="Filter tables" style="margin-bottom:10px" hidden>
+    <div id="schema" class="muted"><small>Connect to a database to see its tables.</small></div>
+  </aside>
+
+  <main><div class="wrap">
+    <section id="connectCard" class="card">
+      <div class="q">Connect to your database</div>
+      <p class="muted" style="margin-top:0">Paste a PostgreSQL or MySQL/MariaDB connection URL.
+        Queries always run read-only. For extra safety, use a database user that only has SELECT access.</p>
+      <form id="connectForm" class="row">
+        <input id="dbUrl" style="flex:1;min-width:240px" autocomplete="off" spellcheck="false"
+               placeholder="postgresql://user:password@localhost:5432/mydb">
+        <button class="primary" id="connectBtn">Connect</button>
+      </form>
+      <small class="muted">e.g. <code>mysql://user:password@localhost:3306/shop</code>. The URL stays on this machine.</small>
+      <div id="connectErr"></div>
+    </section>
+
+    <section id="askCard" class="card ask" hidden>
+      <form id="askForm">
+        <textarea id="question" placeholder="Ask a question, e.g. Which 5 customers spent the most last year?"></textarea>
+        <div class="row" style="margin-top:8px">
+          <button class="primary" id="askBtn">Generate SQL</button>
+          <label style="margin:0;display:flex;gap:6px;align-items:center;color:var(--text)">
+            <input type="checkbox" id="execute" checked style="width:auto"> Run it and show results
+          </label>
+          <span class="spacer"></span>
+          <button type="button" id="newConvBtn" class="link" title="Forget previous questions">New conversation</button>
+        </div>
+        <small class="muted">Enter to send, Shift+Enter for a new line. Follow-ups like "now only for 2024" use earlier questions.</small>
+      </form>
+    </section>
+
+    <div id="answers"></div>
+  </div></main>
+</div>
+
+<dialog id="settingsDlg">
+  <form method="dialog" id="settingsForm">
+    <div class="q">LLM settings</div>
+    <p class="muted" style="margin-top:0">Any OpenAI-compatible API works. The default is Google Gemini; get a free key at
+      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</p>
+    <label for="sKey">API key <span id="keyState"></span></label>
+    <input id="sKey" type="password" autocomplete="off" placeholder="Leave blank to keep the current key">
+    <label for="sModel">Model</label>
+    <input id="sModel" spellcheck="false">
+    <label for="sUrl">Base URL</label>
+    <input id="sUrl" spellcheck="false">
+    <small class="muted">Groq: <code>https://api.groq.com/openai/v1</code> · Ollama: <code>http://localhost:11434/v1</code> (key: any text)</small>
+    <div class="row" style="justify-content:flex-end;margin-top:16px">
+      <button value="cancel" formnovalidate>Cancel</button>
+      <button class="primary" id="saveSettings" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let status = {};
+let schemaData = [];
+let history = [];  // [{question, sql}] for follow-up questions
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Request failed (${res.status})`);
+  return data;
+}
+
+function render() {
+  const on = status.connected;
+  $("dbPill").textContent = on ? `${status.dialect} · ${status.database}` : "Not connected";
+  $("dbPill").className = "pill" + (on ? " on" : "");
+  $("connectCard").hidden = on;
+  $("askCard").hidden = !on;
+  $("disconnectBtn").hidden = !on;
+  $("refreshBtn").hidden = !on;
+  $("schemaFilter").hidden = !on;
+  if (on && !status.has_api_key) showKeyWarning();
+}
+
+function showKeyWarning() {
+  if ($("keyWarn")) return;
+  const div = document.createElement("div");
+  div.id = "keyWarn"; div.className = "note warn";
+  div.innerHTML = 'No LLM API key yet. <button class="link" onclick="openSettings()">Add a free Gemini key</button> to start asking questions.';
+  $("askCard").prepend(div);
+}
+
+function renderSchema() {
+  const f = $("schemaFilter").value.toLowerCase();
+  const tables = schemaData.filter(t => !f || t.name.toLowerCase().includes(f)
+    || t.columns.some(c => c.name.toLowerCase().includes(f)));
+  if (!status.connected) { $("schema").innerHTML = '<small>Connect to a database to see its tables.</small>'; return; }
+  if (!schemaData.length) { $("schema").innerHTML = '<small>No tables found.</small>'; return; }
+  $("schema").innerHTML = `<small class="muted">${schemaData.length} tables</small>` + tables.map(t => `
+    <details class="table-item"><summary>${esc(t.name)}</summary><div class="cols">
+      ${t.columns.map(c => `<div><span>${c.pk ? "🔑 " : ""}${esc(c.name)}</span><span class="t">${esc(c.type)}</span></div>`).join("")}
+    </div></details>`).join("");
+}
+
+async function loadSchema() {
+  schemaData = status.connected ? await api("/api/schema") : [];
+  renderSchema();
+}
+
+async function refreshStatus() {
+  status = await api("/api/status");
+  render();
+  await loadSchema();
+}
+
+$("connectForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = $("connectBtn");
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Reading schema…';
+  $("connectErr").innerHTML = "";
+  try {
+    status = await api("/api/connect", {url: $("dbUrl").value});
+    $("dbUrl").value = "";
+    history = []; $("answers").innerHTML = "";
+    render(); await loadSchema(); $("question").focus();
+  } catch (err) {
+    $("connectErr").innerHTML = `<div class="note err">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Connect";
+  }
+};
+
+$("disconnectBtn").onclick = async () => { status = await api("/api/disconnect", {}); render(); loadSchema(); };
+$("refreshBtn").onclick = async () => { status = await api("/api/schema/refresh", {}); render(); loadSchema(); };
+$("schemaFilter").oninput = renderSchema;
+$("newConvBtn").onclick = () => { history = []; $("answers").innerHTML = ""; $("question").focus(); };
+
+$("question").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("askForm").requestSubmit(); }
+});
+
+$("askForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const question = $("question").value.trim();
+  if (!question) return;
+  const btn = $("askBtn");
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Thinking…';
+  const card = document.createElement("section");
+  card.className = "card";
+  card.innerHTML = `<div class="q">${esc(question)}</div><div class="muted"><span class="spin"></span> Writing SQL…</div>`;
+  $("answers").prepend(card);
+  try {
+    const a = await api("/api/ask", {question, execute: $("execute").checked, history});
+    renderAnswer(card, a);
+    if (a.sql && !a.error) history.push({question, sql: a.sql});
+    $("question").value = "";
+  } catch (err) {
+    card.querySelector(".muted").outerHTML = `<div class="note err">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Generate SQL";
+  }
+};
+
+function renderAnswer(card, a) {
+  const fixed = a.attempts.filter(x => x.error);
+  let html = `<div class="q">${esc(a.question)}</div>`;
+  if (a.explanation) html += `<div class="muted" style="margin-bottom:8px">${esc(a.explanation)}</div>`;
+  if (a.sql) {
+    html += `<textarea class="sql" spellcheck="false">${esc(a.sql)}</textarea>
+      <div class="row" style="margin-top:6px">
+        <button data-act="copy">Copy SQL</button>
+        <button data-act="run">Run SQL</button>
+        <span class="muted" data-role="meta"></span>
+      </div>`;
+  }
+  if (fixed.length && !a.error) {
+    html += `<details class="note warn"><summary>Fixed automatically after ${fixed.length} failed attempt${fixed.length > 1 ? "s" : ""}</summary>
+      ${fixed.map(x => `<pre class="mono" style="white-space:pre-wrap">${esc(x.sql)}\n→ ${esc(x.error)}</pre>`).join("")}</details>`;
+  }
+  html += `<div data-role="out"></div>`;
+  card.innerHTML = html;
+  showResult(card, a.result, a.error);
+
+  const ta = card.querySelector("textarea.sql");
+  if (ta) { ta.style.height = Math.min(400, ta.scrollHeight + 4) + "px"; }
+  card.querySelector('[data-act="copy"]')?.addEventListener("click", (e) => {
+    navigator.clipboard.writeText(ta.value); e.target.textContent = "Copied"; setTimeout(() => e.target.textContent = "Copy SQL", 1200);
+  });
+  card.querySelector('[data-act="run"]')?.addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    try { const r = await api("/api/run", {sql: ta.value}); showResult(card, r.result, r.error); }
+    catch (err) { showResult(card, null, err.message); }
+    finally { e.target.disabled = false; }
+  });
+}
+
+function showResult(card, result, error) {
+  const out = card.querySelector('[data-role="out"]');
+  const meta = card.querySelector('[data-role="meta"]');
+  if (meta) meta.textContent = "";
+  if (error) { out.innerHTML = `<div class="note err">${esc(error)}</div>`; return; }
+  if (!result) { out.innerHTML = ""; if (meta) meta.textContent = "Checked against the database (not run)."; return; }
+  const n = result.rows.length;
+  if (meta) meta.innerHTML = `${n} row${n === 1 ? "" : "s"}${result.truncated ? ` (showing the first ${n})` : ""} · <button class="link" data-act="csv">Download CSV</button>`;
+  if (!result.columns.length) { out.innerHTML = ""; return; }
+  out.innerHTML = `<div class="results"><table><thead><tr>${result.columns.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+    <tbody>${result.rows.map(r => `<tr>${r.map(v => v === null ? '<td class="null">null</td>'
+      : `<td class="${isNum(v) ? "num" : ""}">${esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  meta?.querySelector('[data-act="csv"]')?.addEventListener("click", () => downloadCsv(result));
+}
+
+// Decimals arrive as strings to keep exact precision; align them like numbers.
+const isNum = v => typeof v === "number" || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v));
+
+function downloadCsv(result) {
+  const cell = v => v === null ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  const csv = [result.columns, ...result.rows].map(r => r.map(cell).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv"}));
+  a.download = "nql-result.csv"; a.click(); URL.revokeObjectURL(a.href);
+}
+
+function openSettings() {
+  $("sKey").value = "";
+  $("sModel").value = status.llm_model || "";
+  $("sUrl").value = status.llm_base_url || "";
+  $("keyState").textContent = status.has_api_key ? "(set)" : "(not set)";
+  $("settingsDlg").showModal();
+}
+$("settingsBtn").onclick = openSettings;
+$("settingsDlg").addEventListener("close", async () => {
+  if ($("settingsDlg").returnValue !== "save") return;
+  status = await api("/api/settings", {llm_api_key: $("sKey").value, llm_model: $("sModel").value, llm_base_url: $("sUrl").value});
+  $("keyWarn")?.remove();
+  render();
+});
+
+refreshStatus().catch(err => { $("schema").innerHTML = `<div class="note err">${esc(err.message)}</div>`; });
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Demo databases seeded with examples/seed.sql, for trying NQL out.
+#   docker compose up -d
+#   Postgres: postgresql://demo:demo@localhost:55432/shop
+#   MySQL:    mysql://demo:demo@localhost:53306/shop
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: shop
+    ports: ["127.0.0.1:55432:5432"]
+    volumes:
+      - ./examples/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_USER: demo
+      MYSQL_PASSWORD: demo
+      MYSQL_DATABASE: shop
+      MYSQL_ROOT_PASSWORD: rootdemo
+    ports: ["127.0.0.1:53306:3306"]
+    volumes:
+      - ./examples/seed.sql:/docker-entrypoint-initdb.d/seed.sql:ro

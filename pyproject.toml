@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nql"
+version = "0.1.0"
+description = "Ask your Postgres/MySQL database questions in plain English and get SQL (and results) back."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "sqlalchemy>=2.0.30",
+    "psycopg[binary]>=3.2",
+    "pymysql>=1.1",
+    "sqlglot>=25.0",
+    "openai>=1.40",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+nql = "nql.server:main"
+
+[tool.setuptools]
+packages = ["nql"]
+
+[tool.setuptools.package-data]
+nql = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
